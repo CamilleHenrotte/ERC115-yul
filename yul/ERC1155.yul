@@ -93,94 +93,69 @@ object "ERC1155" {
             if gt(size, 0) {
 
                 let eventSelector := 0xf23a6e61
-                let dataOffset := 0xa4
-                mstore(0x00, eventSelector)     // Store function selector
-                mstore(0x04, caller())    // msg.sender
-                mstore(0x24, from)       // from
-                mstore(0x44, tokenId)   // id
-                mstore(0x64, amount)   // amount
-                mstore(0x84, dataOffset)    // Data offset in calldata (relative to start)
-
-                let dataLength := decodeLength(dataLengthPos)
-                mstore(dataOffset, dataLength)
-
-                let memDest := 0xc4
-                let dataFirstElementPos := add(0x20, dataLengthPos)
-                calldatacopy(memDest, dataFirstElementPos, dataLength)
-
-                let inputSize := add(memDest, dataLength)
-                
+                mstore(0x00, shl(0xe0,eventSelector))     // Store function selector
+                calldatacopy(0x04, 0x04, sub(calldatasize(), 4))
+             
                 let success := call(
                     gas(),  // Forward all gas
                     to,     // Call `to`
                     0,      // No ETH
                     0x00, // Input data pointer
-                    inputSize, // Input size
+                    calldatasize(), // Input size
                     0x00, // Output location
-                    0x20     // Output size (expected return amount)
+                    0x04     // Output size (expected return amount)
                 )
+
                 require(success)
-                require(eq(mload(0x00), eventSelector))
+                require(eq(shr(0xe0,mload(0x00)), eventSelector))
               
             } 
         }
         function batchTransferFrom(from, to,  tokenIdsLengthPos, amountsLengthPos, dataLengthPos){
-             require(or(eq(caller(), from), isApprovedForAll(from, caller())))
+            require(or(eq(caller(), from), isApprovedForAll(from, caller())))
             require(eq(decodeLength(amountsLengthPos), decodeLength(tokenIdsLengthPos)))
+            let length := decodeLength(amountsLengthPos)
             let i := 0
-            for { } lt(i, decodeLength(amountsLengthPos)) { } { 
+            
+            
+            
+            for { } lt(i, length) { } { 
                 let tokenIdsFirstElementPos := getFirstElementPosition(tokenIdsLengthPos)
                 let amountsFirstElementPos := getFirstElementPosition(amountsLengthPos)
+                
                 let tokenId := decodeArrayItemAsUint(tokenIdsFirstElementPos, i) 
                 let amount := decodeArrayItemAsUint(amountsFirstElementPos, i)
+               
                 deductFromBalance(from, tokenId, amount)
                 addToBalance(to, tokenId, amount)
+                
                 i := add(i, 1)
             }
             if gt(extcodesize(to), 0) {
                 let eventSelector := 0xbc197c81
-                let tokenIdsOffset := 0xa4
-                let amountsOffset := add(getFirstElementPosition(tokenIdsOffset), decodeLength(tokenIdsLengthPos))
-                let dataOffset := add(getFirstElementPosition(amountsOffset), decodeLength(amountsLengthPos))
-                
-                
-                mstore(0x00, eventSelector)     // Store function selector
-                mstore(0x04, caller())    // msg.sender
-                mstore(0x24, from)       // from
-                mstore(0x44, tokenIdsOffset)   // tokenIds offset
-                mstore(0x64, amountsOffset)   // amounts offset
-                mstore(0x84, dataOffset)    // data offset in calldata (relative to start)
-
-                mstore(tokenIdsOffset, decodeLength(tokenIdsLengthPos))
-                mstore(amountsOffset, decodeLength(amountsLengthPos))
-                mstore(dataOffset, decodeLength(dataLengthPos))
-                
-
-                
-                calldatacopy(getFirstElementPosition(tokenIdsOffset), getFirstElementPosition(tokenIdsLengthPos), decodeLength(tokenIdsLengthPos))
-                calldatacopy(getFirstElementPosition(amountsOffset), getFirstElementPosition(amountsLengthPos), decodeLength(amountsLengthPos))
-                calldatacopy(getFirstElementPosition(dataOffset), getFirstElementPosition(dataLengthPos), decodeLength(dataLengthPos))
-                require(call(
+                mstore(0x00, shl(0xe0,eventSelector))
+                calldatacopy(0x04, 0x04, sub(calldatasize(), 4))
+                let success := call(
                     gas(),  // Forward all gas
                     to,     // Call `to`
                     0,      // No ETH
                     0x00, // Input data pointer
-                    add(getFirstElementPosition(dataOffset), decodeLength(dataLengthPos)), // Input size
+                    calldatasize(), // Input size
                     0x00, // Output location
                     0x20     // Output size (expected return amount)
-                ))
-                require(eq(mload(0x00), eventSelector))
-                emitTransferBatch(caller(), from, to, tokenIdsOffset, add(add(0x40, decodeLength(tokenIdsLengthPos)), decodeLength(amountsLengthPos)))
+                )
+                require(success)
+                require(eq(shr(0xe0,mload(0x00)), eventSelector))
+               
             } 
-            if iszero(gt(extcodesize(to), 0)){
-                let tokenIdsOffset := 0x00
-                let amountsOffset := add(getFirstElementPosition(tokenIdsOffset), decodeLength(tokenIdsLengthPos))
-                mstore(tokenIdsOffset, decodeLength(tokenIdsLengthPos))
-                mstore(amountsOffset, decodeLength(amountsLengthPos))
-                calldatacopy(getFirstElementPosition(tokenIdsOffset), getFirstElementPosition(tokenIdsLengthPos), decodeLength(tokenIdsLengthPos))
-                calldatacopy(getFirstElementPosition(amountsOffset), getFirstElementPosition(amountsLengthPos), decodeLength(amountsLengthPos))
-                emitTransferBatch(caller(), from, to, tokenIdsOffset, add(add(0x40, decodeLength(tokenIdsLengthPos)), decodeLength(amountsLengthPos)))
-            }
+            let tokenIdsOffset := 0x40
+            let totalBytesLength := mul(add(0x20, mul(0x20,length)),2)
+            let amountsOffset := add(0x40, div(totalBytesLength, 2))
+            mstore(0x00, tokenIdsOffset)   // tokenIds offset
+            mstore(0x20, amountsOffset)   // amounts offset
+            calldatacopy(tokenIdsOffset, 0xa4,totalBytesLength)
+            emitTransferBatch(caller(), from, to, 0x00, add(0x40,totalBytesLength))
+            
 
 
             
@@ -259,10 +234,10 @@ object "ERC1155" {
             if lt(calldatasize(), add(lengthPos, 0x20)) {
                 revert(0, 0)
             }
-            v := calldataload(lengthPos)
+            v := calldataload(add(lengthPos, 4))
         }
         function getFirstElementPosition(lengthPos) -> v {
-            v := add(0x20, lengthPos)
+            v := add(0x24, lengthPos)
         }
         function decodeArrayItemAsUint(positionOfFirstElement, index) -> v {
             let pos := add(positionOfFirstElement, mul(index, 0x20))

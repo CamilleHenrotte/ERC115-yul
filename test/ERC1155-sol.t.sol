@@ -60,6 +60,10 @@ contract ERC1155Recipient is ERC1155TokenReceiver {
 
         return ERC1155TokenReceiver.onERC1155BatchReceived.selector;
     }
+    fallback(bytes calldata b) external returns (bytes memory) {
+        bytes memory ret = abi.encode(1);
+        return ret;
+    }
 }
 
 contract RevertingERC1155Recipient is ERC1155TokenReceiver {
@@ -106,7 +110,17 @@ contract WrongReturnDataERC1155Recipient is ERC1155TokenReceiver {
     }
 }
 
-contract NonERC1155Recipient {}
+contract NonERC1155Recipient {
+    function onERC1155Received(
+        address _operator,
+        address _from,
+        uint256 _id,
+        uint256 _amount,
+        bytes calldata _data
+    ) public virtual returns (bytes4) {
+        return 0x00000;
+    }
+}
 
 contract ERC1155Test is DSTestPlus, ERC1155TokenReceiver {
     MockERC1155 token;
